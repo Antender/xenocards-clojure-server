@@ -2,7 +2,7 @@
   (:use org.httpkit.server)
   (:gen-class))
 
-(def handlers (atom{}))
+(def handlers (atom {}))
 
 (def registered-names (atom {}))
 
@@ -32,7 +32,16 @@
     (do
       (exit-room channel)
       (send! channel "exited room")
-      (swap! userlocations dissoc channel)))
+      (swap! userlocations dissoc channel))
+  "roomname" 1
+    (send! channel (@userlocations channel))
+  "myrole" 1
+    (send! channel (if (= ((@rooms (@userlocations channel)) :host) (@users channel)) "host" "opponent"))
+  "opponentsname" 1
+    (let [role (if (= ((@rooms (@userlocations channel)) :host) (@users channel)) :host :opponent)]
+        (if-let [name ((@rooms (@userlocations channel)) (if (= role :host) :opponent :host))]
+          (send! channel name)
+          (send! channel "no opponent"))))
 
 (defcommands receive-lobby channel commanddata
   "listplayers" 1
@@ -47,8 +56,18 @@
       (do
         (swap! rooms assoc (command 1) {:host (@users channel)})
         (swap! userlocations assoc channel (command 1))
-        (send! channel (str "room " (command 1) " created"))
-        (swap! handlers assoc channel receive-room))))
+        (swap! handlers assoc channel receive-room)
+        (send! channel (str "room " (command 1) " created"))))
+  "joinroom" 2
+    (if-let [room (@rooms (command 1))]
+      (if (contains? room :opponent)
+        (send! channel "occupied")
+        (do
+          (swap! rooms assoc (command 1) {:opponent (@users channel)})
+          (swap! userlocations assoc channel (command 1))
+          (swap! handlers assoc channel receive-room)
+          (send! channel (str "entered room " (command 1)))))
+      (send! channel "no room with this name")))
 
 (defcommands receive-signin channel commanddata
   "connect" 3
@@ -67,6 +86,8 @@
         (swap! registered-names assoc (command 1) (command 2))
         (send! channel "success"))))
 
+
+
 (defn exit-room [channel]
   (if-let [roomname (@userlocations channel)]
     (let [role (if (= ((@rooms roomname) :host (@users channel))) :host :opponent)]
@@ -74,6 +95,8 @@
       (if (not (or (contains? (@rooms roomname) :host) (contains? (@rooms roomname) :opponent)))
         (swap! rooms dissoc roomname))))
       (swap! handlers assoc channel receive-lobby))
+
+
 
 (defn handler [request]
   (with-channel request channel
