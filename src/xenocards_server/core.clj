@@ -2,6 +2,8 @@
   (:use org.httpkit.server)
   (:gen-class))
 
+(declare exit-room)
+
 (def handlers (atom {}))
 
 (def registered-names (atom {}))
@@ -24,8 +26,6 @@
                   ~(nth commandhandler# 2))))
                      (partition 3 body))
            (send! ~channel "unsupported command"))))))
-
-(def exit-room nil)
 
 (defcommands receive-room channel commanddata
   "exit" 1
